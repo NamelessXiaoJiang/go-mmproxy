@@ -1,29 +1,27 @@
-# go-mmproxy
+# go-mmproxy (FRP Support Branch)
 
-This is a Go reimplementation of [mmproxy](https://github.com/cloudflare/mmproxy), created to improve on mmproxy's runtime stability while providing potentially greater performance in terms of connection and packet throughput.
+This is a specialized branch of `go-mmproxy`, a Go reimplementation of [mmproxy](https://github.com/cloudflare/mmproxy), which includes native support for **FRP (Fast Reverse Proxy)**.
 
-`go-mmproxy` is a standalone application that unwraps HAProxy's [PROXY protocol](http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) (also adopted by other projects such as NGINX) so that the network connection to the end server comes from client's - instead of proxy server's - IP address and port number.
-Because they share basic mechanisms, [Cloudflare's blogpost on mmproxy](https://blog.cloudflare.com/mmproxy-creative-way-of-preserving-client-ips-in-spectrum/) serves as a great write-up on how `go-mmproxy` works under the hood.
+`go-mmproxy` is a standalone application that unwraps HAProxy's [PROXY protocol](http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) so that the network connection to the end server comes from the client's IP address and port number, rather than the proxy server's. This branch extends that functionality to work seamlessly with FRP.
 
 ## Building
 
 ```shell
-go install github.com/path-network/go-mmproxy@latest
+go build -o go-mmproxy .
 ```
 
 You'll need at least `go 1.21` to build the `go-mmproxy` binary.
-See [Go's Getting Started](https://golang.org/doc/install) if your package manager does not carry new enough version of golang.
 
 ## Requirements
 
-`go-mmproxy` has to be ran:
+`go-mmproxy` must be run:
 
-- on the same server as the proxy target, as the communication happens over the loopback interface;
-- as root or with `CAP_NET_ADMIN` capability to be able to set `IP_TRANSPARENT` socket opt.
+- On the same server as the proxy target (communication happens over the loopback interface).
+- As root or with `CAP_NET_ADMIN` capability to set `IP_TRANSPARENT` socket options.
 
-## Running
+## Usage
 
-### Routing setup
+### Routing Setup
 
 Route all traffic originating from loopback back to loopback:
 
@@ -35,19 +33,56 @@ ip -6 rule add from ::1/128 iif lo table 123
 ip -6 route add local ::/0 dev lo table 123
 ```
 
-If `--mark` option is given to `go-mmproxy`, all packets routed to the loopback interface will have the mark set.
-This can be used for setting up more advanced routing rules with iptables, for example when you need traffic from loopback to be routed outside of the machine.
+### Automatic Configuration with -a
 
-#### Routing UDP packets
+`go-mmproxy` provides an `-a` (or `--auto`) flag to automatically configure the necessary `ip rule`, `ip route`, and `iptables` settings. This simplifies the setup process significantly.
 
-Because UDP is connectionless, if a socket is bound to `0.0.0.0` the kernel stack will search for an interface in order to send a reply to the spoofed source address - instead of just using the interface it received the original packet from.
-The found interface will most likely _not_ be the loopback interface, which will avoid the rules specified above.
-The simplest way to fix this is to bind the end server's listeners to `127.0.0.1` (or `::1`).
-This is also generally recommended in order to avoid receiving non-proxied connections.
+**Recommendation:** Even when using the `-a` flag, it is highly recommended to specify the `--mark` option for all modes (including TCP) to ensure consistent routing behavior and easier troubleshooting.
+
+```shell
+sudo ./go-mmproxy --mode tcp --listen 0.0.0.0:8080 --target 127.0.0.1:80 --mark 123 -a
+```
+
+When using `udp` or `frpudp` modes, the `--mark` option is mandatory for the `-a` flag to correctly apply the required `iptables` rules.
+
+```shell
+sudo ./go-mmproxy --mode frpudp --listen 0.0.0.0:8080 --target 127.0.0.1:80 --mark 123 -a
+```
+
+*Note: This requires root privileges to execute the `ip` and `iptables` commands.*
+
+### Manual Configuration
+
+If you choose not to use the `-a` flag, you must manually configure the routing and firewall rules:
+
+1. **Routing Setup:**
+   ```shell
+   ip rule add from 127.0.0.1/8 iif lo table 123
+   ip route add local 0.0.0.0/0 dev lo table 123
+   ip -6 rule add from ::1/128 iif lo table 123
+   ip -6 route add local ::/0 dev lo table 123
+   ```
+
+2. **Firewall Setup (for UDP/FRP-UDP with --mark):**
+   If you are using `udp` or `frpudp` modes, you must manually configure `iptables` to route the marked packets:
+   ```shell
+   iptables -t mangle -A OUTPUT -p udp -m mark --mark 123 -j CONNMARK --save-mark
+   ip rule add fwmark 123 table 123
+   ```
 
 ### Starting go-mmproxy
 
+```shell
+# TCP Example
+./go-mmproxy --mode tcp --listen 0.0.0.0:8080 --target 127.0.0.1:80
+
+# UDP Example
+./go-mmproxy --mode udp --listen 0.0.0.0:8080 --target 127.0.0.1:80 --mark 123
+
+# FRP-UDP Example
+./go-mmproxy --mode frpudp --listen 0.0.0.0:8080 --target 127.0.0.1:80 --mark 123
 ```
+
 Usage of ./go-mmproxy:
   -4 string
     	Address to which IPv4 traffic will be forwarded to (default "127.0.0.1:443")
