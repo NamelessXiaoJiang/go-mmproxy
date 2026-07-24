@@ -19,7 +19,7 @@ jobs:
 
       - name: Build
         run: |
-          GOOS=linux GOARCH=amd64 go build -o go-mmproxy-linux-amd64 main.go
+          GOOS=linux GOARCH=amd64 go build -o go-mmproxy-linux-amd64 .
 
       - name: Create Release
         id: create_release
