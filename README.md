@@ -1,8 +1,11 @@
 # go-mmproxy (FRP Support Branch)
 
-This is a specialized branch of `go-mmproxy`, a Go reimplementation of [mmproxy](https://github.com/cloudflare/mmproxy), which includes native support for **FRP (Fast Reverse Proxy)**.
+This branch implements support for FRP UDP protocol and adds automatic routing configuration.
 
-`go-mmproxy` is a standalone application that unwraps HAProxy's [PROXY protocol](http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) so that the network connection to the end server comes from the client's IP address and port number, rather than the proxy server's. This branch extends that functionality to work seamlessly with FRP.
+This is a Go reimplementation of [mmproxy](https://github.com/cloudflare/mmproxy), created to improve on mmproxy's runtime stability while providing potentially greater performance in terms of connection and packet throughput.
+
+`go-mmproxy` is a standalone application that unwraps HAProxy's [PROXY protocol](http://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) (also adopted by other projects such as NGINX) so that the network connection to the end server comes from client's - instead of proxy server's - IP address and port number.
+Because they share basic mechanisms, [Cloudflare's blogpost on mmproxy](https://blog.cloudflare.com/mmproxy-creative-way-of-preserving-client-ips-in-spectrum/) serves as a great write-up on how `go-mmproxy` works under the hood.
 
 ## Building
 
@@ -99,7 +102,7 @@ Usage of ./go-mmproxy:
   -mark int
     	The mark that will be set on outbound packets
   -p string
-    	Protocol that will be proxied: tcp, udp (default "tcp")
+    	Protocol that will be proxied: tcp, udp, frpudp (default "tcp")
   -v int
     	0 - no logging of individual connections
     	1 - log errors occurring in individual connections
